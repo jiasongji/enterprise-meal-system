@@ -1,0 +1,56 @@
+<?php
+// public/install.php
+header('Content-Type: text/html; charset=utf-8');
+$dbDir = __DIR__ . '/../data';
+$dbFile = $dbDir . '/meal.db';
+
+if (!is_dir($dbDir)) {
+    mkdir($dbDir, 0755, true);
+    file_put_contents($dbDir . '/.htaccess', "Order deny,allow\nDeny from all");
+}
+
+try {
+    $pdo = new PDO('sqlite:' . $dbFile);
+    $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $pdo->exec("PRAGMA foreign_keys = OFF;");
+
+    // 定义表结构
+    $tables = [
+        'departments' => "CREATE TABLE IF NOT EXISTS departments (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)",
+        'user_levels' => "CREATE TABLE IF NOT EXISTS user_levels (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, price INTEGER)",
+        'users' => "CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, phone TEXT UNIQUE, password TEXT, name TEXT, department_id INTEGER, level_id INTEGER, role TEXT DEFAULT 'user', status INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now', 'localtime')), FOREIGN KEY(level_id) REFERENCES user_levels(id))",
+        'balances' => "CREATE TABLE IF NOT EXISTS balances (user_id INTEGER PRIMARY KEY, amount INTEGER DEFAULT 0, updated_at TEXT, FOREIGN KEY(user_id) REFERENCES users(id))",
+        'recharge_logs' => "CREATE TABLE IF NOT EXISTS recharge_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, operator_id INTEGER, amount INTEGER, created_at TEXT DEFAULT (datetime('now', 'localtime')))",
+        'meal_orders' => "CREATE TABLE IF NOT EXISTS meal_orders (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, order_date TEXT, meal_type TEXT DEFAULT 'lunch', price INTEGER, status TEXT DEFAULT 'ordered', created_at TEXT DEFAULT (datetime('now', 'localtime')), UNIQUE(user_id, order_date))",
+        'system_config' => "CREATE TABLE IF NOT EXISTS system_config (key TEXT PRIMARY KEY, value TEXT, desc TEXT)",
+        'meal_schedules' => "CREATE TABLE IF NOT EXISTS meal_schedules (date TEXT PRIMARY KEY, menu_text TEXT, created_at TEXT DEFAULT (datetime('now', 'localtime')))",
+        // 新增：问题反馈表
+        'feedbacks' => "CREATE TABLE IF NOT EXISTS feedbacks (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, content TEXT, reply TEXT, status INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now', 'localtime')))"
+    ];
+
+    foreach ($tables as $sql) $pdo->exec($sql);
+    $pdo->exec("PRAGMA foreign_keys = ON;");
+
+    // 初始化配置
+    $pdo->prepare("INSERT OR IGNORE INTO system_config (key, value, desc) VALUES (?, ?, ?)")->execute(['deadline_lunch', '10:30', '报餐截止时间']);
+    $pdo->prepare("INSERT OR IGNORE INTO system_config (key, value, desc) VALUES (?, ?, ?)")->execute(['sys_notice', '欢迎使用企业报餐系统！', '系统公告']);
+
+    // 基础数据
+    $stmt = $pdo->prepare("INSERT OR IGNORE INTO user_levels (id, name, price) VALUES (?, ?, ?)");
+    $stmt->execute([1, '内部员工', 1000]); 
+    $stmt->execute([2, '外部人员', 1500]);
+
+    // 管理员
+    $check = $pdo->query("SELECT count(*) FROM users WHERE phone='13800138000'")->fetchColumn();
+    if ($check == 0) {
+        $pass = password_hash('admin123', PASSWORD_DEFAULT);
+        $pdo->prepare("INSERT INTO users (phone, password, name, level_id, role, status) VALUES (?, ?, ?, 1, 'admin', 1)")
+            ->execute(['13800138000', $pass, '超级管理员']);
+        $uid = $pdo->lastInsertId();
+        $pdo->exec("INSERT INTO balances (user_id, amount) VALUES ($uid, 0)");
+    }
+
+    echo "数据库结构已更新（新增问题反馈表）。请删除 install.php";
+} catch (PDOException $e) {
+    die("Error: " . $e->getMessage());
+}

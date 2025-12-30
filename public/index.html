@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>亿佰食堂·报餐系统</title>
+    <link rel="stylesheet" href="static/style.css">
+    <style>
+        /* --- 样式优化 --- */
+        
+        /* 板块标题 */
+        .section-title { margin: 18px 0 10px; font-size: 15px; color: #444; font-weight: 700; padding-left: 5px; border-left: 4px solid #007bff; line-height: 1; }
+
+        /* 公告内容框 */
+        .notice-bar { 
+            background: #fffbe6; 
+            color: #d48806; 
+            padding: 12px 15px; 
+            font-size: 14px; 
+            border-radius: 8px; 
+            border: 1px solid #ffe58f; 
+            line-height: 1.6; 
+            display: flex; 
+            flex-direction: column; 
+        }
+        
+        .notice-content { 
+            white-space: pre-wrap; 
+            word-break: break-all; 
+            overflow: hidden; 
+            transition: max-height 0.3s ease; 
+            width: 100%; /* 确保对齐生效 */
+        }
+        
+        .notice-content.collapsed { max-height: 120px; -webkit-mask-image: linear-gradient(180deg, #000 60%, transparent); }
+        .notice-content.expanded { max-height: 2000px; -webkit-mask-image: none; }
+        
+        .notice-btn { 
+            align-self: flex-end; /* 按钮始终靠右下 */
+            color: #d48806; 
+            font-weight: bold; 
+            font-size: 12px; 
+            margin-top: 8px; 
+            cursor: pointer; 
+            border-bottom: 1px dashed #d48806; 
+        }
+        .notice-btn:hover { opacity: 0.8; }
+        
+        /* --- 原有样式 --- */
+        .grid-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+        .grid-item { background: #fff; padding: 20px 5px; text-align: center; border-radius: 10px; font-size: 13px; color: #555; box-shadow: 0 2px 5px rgba(0,0,0,0.02); transition: all 0.2s; border: 1px solid #f0f0f0; }
+        .grid-item:active { transform: scale(0.98); background: #fafafa; }
+        .grid-item i { font-size: 24px; display: block; margin-bottom: 8px; }
+        
+        .profile-header { background: linear-gradient(135deg, #007bff, #0056b3); color: #fff; text-align: center; padding: 30px 20px; border-radius: 0 0 20px 20px; margin-bottom: 20px; }
+        .menu-list { background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .menu-item-row { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-size: 15px; cursor: pointer; }
+        .menu-item-row:last-child { border-bottom: none; }
+        .menu-item-row:active { background: #f9f9f9; }
+        .search-box { display: flex; gap: 10px; margin-bottom: 15px; }
+        .role-tag { padding: 2px 6px; border-radius: 4px; font-size: 12px; color: #fff; margin-left:5px;}
+        .role-admin { background: #6f42c1; }
+        .role-finance { background: #17a2b8; }
+        .role-user { background: #6c757d; }
+        
+        /* 单选框样式 */
+        .radio-group { display: flex; gap: 15px; margin-bottom: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px; }
+        .radio-group label { display: flex; align-items: center; cursor: pointer; font-size: 14px; color: #333; }
+        .radio-group input { margin-right: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="page-auth" class="container hidden">
+    <div class="card" style="margin-top: 50px;">
+        <h2 style="text-align:center; color:#333;">亿佰食堂·报餐系统</h2>
+        <div id="auth-login">
+            <input type="tel" id="l-phone" placeholder="请输入手机号">
+            <input type="password" id="l-pass" placeholder="请输入密码">
+            <button class="btn" onclick="doLogin()">安全登录</button>
+            <div style="margin-top:20px; text-align:center; font-size:13px; color:#666;">
+                还没有账号？<a href="javascript:showAuth('reg')" style="color:#007bff; text-decoration:none;">立即注册</a>
+            </div>
+        </div>
+        <div id="auth-reg" class="hidden">
+            <input type="tel" id="r-phone" placeholder="手机号">
+            <input type="password" id="r-pass" placeholder="设置登录密码">
+            <input type="text" id="r-name" placeholder="真实姓名">
+            <label style="font-size:12px; color:#666; margin-bottom:5px; display:block;">身份类型</label>
+            <select id="r-level"><option value="1">加载中...</option></select>
+            <button class="btn btn-outline" onclick="doReg()">提交注册</button>
+            <div style="margin-top:20px; text-align:center; font-size:13px;">
+                <a href="javascript:showAuth('login')" style="color:#666; text-decoration:none;">← 返回登录</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="page-app" class="hidden">
+    <div id="view-home" class="container">
+        
+        <div id="notice-section" class="hidden">
+            <h4 class="section-title">餐厅公告</h4>
+            <div class="notice-bar">
+                <div id="notice-text" class="notice-content expanded"></div>
+                <div id="notice-toggle" class="notice-btn hidden" onclick="toggleNotice()">收起公告 ▲</div>
+            </div>
+        </div>
+
+        <div id="home-empty-tip" class="hidden" style="text-align:center; color:#999; margin-top:50px; font-size:13px;">
+            <p>👋 欢迎使用报餐系统</p>
+            <p>请点击底部 <strong>“报餐”</strong> 按钮开始使用</p>
+        </div>
+
+        <div id="admin-area" class="hidden">
+            <h4 class="section-title">餐厅管理</h4>
+            <div class="grid-menu" id="home-grid"></div>
+        </div>
+    </div>
+
+    <div id="view-order" class="container hidden">
+        <h4 style="margin-top:5px; margin-bottom:15px;">📅 餐单预订</h4>
+        <div id="order-list">
+            <div style="text-align:center; padding:20px; color:#999;">正在加载餐单...</div>
+        </div>
+    </div>
+
+    <div id="view-profile" class="hidden">
+        <div class="card" style="background: linear-gradient(135deg, #007bff, #0062cc); color: #fff; text-align: center; padding: 30px 20px; border-radius: 0 0 20px 20px; margin-bottom: 20px; border:none;">
+            <h2 id="p-name" style="font-size:20px;">--</h2>
+            <p id="p-phone" style="opacity:0.8; font-size:13px; margin-top:5px;">--</p>
+            <div style="margin-top:20px;">
+                <span style="opacity:0.8; font-size:12px;">当前余额</span>
+                <div style="font-size:32px; font-weight:bold; line-height:1;">¥ <span id="p-balance">0.00</span></div>
+            </div>
+            <div id="p-role-tag" style="margin-top:10px; font-size:11px; background:rgba(255,255,255,0.2); display:inline-block; padding:3px 10px; border-radius:12px;"></div>
+        </div>
+
+        <div class="container" style="margin-top:-20px;">
+            <div class="card">
+                <div class="list-item" onclick="openEditProfile()"><span>👤 修改个人资料</span><span style="color:#ccc">›</span></div>
+                <div class="list-item" onclick="openMyHistory()"><span>📋 报餐消费记录</span><span style="color:#ccc">›</span></div>
+                <div class="list-item" onclick="openFeedbackSubmit()"><span>📝 提交问题反馈</span><span style="color:#ccc">›</span></div>
+            </div>
+            
+            <button class="btn btn-danger" onclick="doLogout()" style="margin-top: 20px;">退出登录</button>
+            
+            <div style="text-align:center; color:#ccc; font-size:12px; margin-top:20px; padding-bottom:10px;">
+                开发人员：JYF
+            </div>
+        </div>
+    </div>
+
+    <div class="tab-bar">
+        <div class="tab-item active" onclick="switchTab('home')"><span class="tab-icon">🏠</span>首页</div>
+        <div class="tab-item" onclick="switchTab('order')"><span class="tab-icon">🍱</span>报餐</div>
+        <div class="tab-item" onclick="switchTab('profile')"><span class="tab-icon">👤</span>我的</div>
+    </div>
+</div>
+
+<div id="sub-page" class="container hidden" style="position:fixed; top:0; left:0; right:0; bottom:0; background:#f4f6f9; z-index:200; overflow-y:auto; padding-bottom:50px;">
+    <div style="position:sticky; top:0; z-index:10; background:#fff; padding:10px 15px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+        <h3 style="margin:0; font-size:16px;" id="sub-title">标题</h3>
+        <button onclick="closeSubPage()" style="padding:6px 15px; background:#f5f5f5; border:1px solid #ddd; border-radius:15px; font-size:12px; color:#333;">关闭</button>
+    </div>
+    <div id="sub-content" style="padding-top:15px;"></div>
+</div>
+
+<script src="static/app.js"></script>
+<script>
+    let curUser = null;
+    let globalLevels = [];
+
+    (async function init() {
+        await loadLevelsMeta();
+        const res = await request('/user/info.php');
+        if (res.code === 0) {
+            curUser = res.data;
+            loadConfig(); 
+            renderHome();
+            updateProfileUI();
+            showApp();
+        } else {
+            renderRegSelect();
+            document.getElementById('page-auth').classList.remove('hidden');
+        }
+    })();
+
+    async function loadLevelsMeta() {
+        const res = await request('/user/levels.php'); 
+        if(res.code === 0 && res.data.length > 0) {
+            globalLevels = res.data;
+        } else {
+            globalLevels = [{id:1, name:'默认内部员工', price:1000}, {id:2, name:'默认外部人员', price:1500}];
+        }
+        renderRegSelect();
+    }
+
+    function renderRegSelect() {
+        const sel = document.getElementById('r-level');
+        if(globalLevels.length > 0) {
+            sel.innerHTML = globalLevels.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+        }
+    }
+
+    function showAuth(t) { 
+        document.getElementById('auth-login').classList.toggle('hidden', t!=='login'); 
+        document.getElementById('auth-reg').classList.toggle('hidden', t!=='reg'); 
+    }
+    function showApp() { 
+        document.getElementById('page-auth').classList.add('hidden'); 
+        document.getElementById('page-app').classList.remove('hidden'); 
+    }
+    function switchTab(t) {
+        ['home','order','profile'].forEach(x=>document.getElementById('view-'+x).classList.add('hidden'));
+        document.querySelectorAll('.tab-item').forEach(e=>e.classList.remove('active'));
+        document.getElementById('view-'+t).classList.remove('hidden');
+        if(t==='home') document.querySelectorAll('.tab-item')[0].classList.add('active');
+        if(t==='order') { document.querySelectorAll('.tab-item')[1].classList.add('active'); loadOrderList(); }
+        if(t==='profile') { document.querySelectorAll('.tab-item')[2].classList.add('active'); refreshUserData(); }
+    }
+    async function refreshUserData() {
+        const res = await request('/user/info.php');
+        if(res.code===0) { curUser=res.data; updateProfileUI(); }
+    }
+    function updateProfileUI() {
+        document.getElementById('p-name').innerText = curUser.name;
+        document.getElementById('p-phone').innerText = curUser.phone;
+        document.getElementById('p-balance').innerText = (curUser.balance/100).toFixed(2);
+        const roleName = curUser.role==='admin'?'超级管理员':(curUser.role==='finance'?'财务人员':'普通用户');
+        document.getElementById('p-role-tag').innerText = roleName;
+    }
+
+    // ================= 公告逻辑 (核心优化：修复对齐) =================
+    async function loadConfig() {
+        const res = await request('/admin/config.php');
+        const sectionDiv = document.getElementById('notice-section');
+        const textDiv = document.getElementById('notice-text');
+        const btnDiv = document.getElementById('notice-toggle');
+
+        if(res.code===0 && res.data.sys_notice) {
+            textDiv.innerText = res.data.sys_notice;
+            
+            // 修复对齐：读取配置并应用
+            const align = res.data.sys_notice_align || 'left';
+            textDiv.style.textAlign = align;
+
+            sectionDiv.classList.remove('hidden');
+            
+            setTimeout(() => {
+                if (textDiv.scrollHeight > 120) {
+                    textDiv.classList.add('collapsed'); textDiv.classList.remove('expanded');
+                    btnDiv.innerText = '展开全文 ▼'; btnDiv.classList.remove('hidden');
+                } else {
+                    textDiv.classList.add('expanded'); textDiv.classList.remove('collapsed');
+                    btnDiv.classList.add('hidden');
+                }
+            }, 100);
+        } else {
+            if (curUser.role === 'user') document.getElementById('home-empty-tip').classList.remove('hidden');
+        }
+    }
+    function toggleNotice() {
+        const textDiv = document.getElementById('notice-text');
+        const btnDiv = document.getElementById('notice-toggle');
+        if (textDiv.classList.contains('collapsed')) {
+            textDiv.classList.remove('collapsed'); textDiv.classList.add('expanded'); btnDiv.innerText = '收起公告 ▲';
+        } else {
+            textDiv.classList.add('collapsed'); textDiv.classList.remove('expanded'); btnDiv.innerText = '展开全文 ▼';
+        }
+    }
+
+    // ================= 核心：首页渲染 =================
+    function renderHome() {
+        const grid = document.getElementById('home-grid');
+        const adminArea = document.getElementById('admin-area');
+        let html = '';
+        const role = curUser.role;
+
+        if (role === 'user') { adminArea.classList.add('hidden'); return; }
+
+        adminArea.classList.remove('hidden');
+        if (role === 'admin') html += genGridItem('openNoticeEdit', '📢', '公告发布');
+        if (role === 'admin') html += genGridItem('openMealStats', '📊', '报餐统计');
+        if (role === 'admin') html += genGridItem('openSchedule', '📅', '排餐管理');
+        if (role === 'admin') html += genGridItem('openBookingConfig', '⏰', '报餐管理');
+        if (role === 'admin') html += genGridItem('openUserMgr', '👥', '人员管理');
+        html += genGridItem('openFinanceMgr', '💰', '财务管理');
+        html += genGridItem('openPrices', '🏷️', '身份价格'); 
+        html += genGridItem('openAnalysis', '📈', '统计分析');
+        if (role === 'admin') html += genGridItem('openFeedbackList', '📝', '问题反馈');
+        grid.innerHTML = html;
+    }
+    function genGridItem(fn, icon, name) { return `<div class="grid-item" onclick="${fn}()"><i>${icon}</i>${name}</div>`; }
+    function openSubPage(title, html) { document.getElementById('sub-title').innerText = title; document.getElementById('sub-content').innerHTML = html; document.getElementById('sub-page').classList.remove('hidden'); }
+    function closeSubPage() { document.getElementById('sub-page').classList.add('hidden'); }
+
+    // ================= 功能模块 =================
+    
+    // 1. 公告 (带对齐选项)
+    async function openNoticeEdit() {
+        const res = await request('/admin/config.php');
+        const content = res.data.sys_notice || '';
+        const align = res.data.sys_notice_align || 'left';
+        
+        const alignOpts = `
+            <div class="radio-group">
+                <span style="margin-right:10px;color:#666">对齐：</span>
+                <label><input type="radio" name="n-align" value="left" ${align=='left'?'checked':''}> 居左</label>
+                <label><input type="radio" name="n-align" value="center" ${align=='center'?'checked':''}> 居中</label>
+                <label><input type="radio" name="n-align" value="right" ${align=='right'?'checked':''}> 居右</label>
+            </div>
+        `;
+
+        openSubPage('公告发布', `
+            <div class="card">
+                ${alignOpts}
+                <textarea id="n-val" rows="8" placeholder="输入公告内容..." style="width:100%">${content}</textarea>
+                <button class="btn" style="margin-top:10px" onclick="saveN()">发布公告</button>
+            </div>
+        `);
+    }
+    async function saveN(){ 
+        const content = document.getElementById('n-val').value;
+        const alignEl = document.querySelector('input[name="n-align"]:checked');
+        const align = alignEl ? alignEl.value : 'left';
+        
+        await request('/admin/config.php','POST',{sys_notice: content, sys_notice_align: align}); 
+        alert('发布成功'); 
+        closeSubPage(); 
+        loadConfig(); 
+    }
+
+    async function openMealStats() {
+        const t = new Date().toISOString().split('T')[0];
+        openSubPage('报餐统计', `<div class="card"><div class="search-box"><input type="date" id="ms-s" value="${t}"><span>-</span><input type="date" id="ms-e" value="${t}"><button class="btn" style="width:60px" onclick="loadMS()">查</button></div><div id="ms-res"></div></div>`);
+        loadMS();
+    }
+    async function loadMS(){
+        const s=document.getElementById('ms-s').value; const e=document.getElementById('ms-e').value;
+        const res=await request(`/admin/stats.php?type=meal&start=${s}&end=${e}`);
+        if(!res.data.length) return document.getElementById('ms-res').innerHTML='<div style="text-align:center;padding:10px;color:#999">无数据</div>';
+        let h=`<table><tr><th>日期</th><th>人数</th><th>金额</th></tr>`;
+        h+=res.data.map(r=>`<tr><td>${r.order_date}</td><td>${r.total_count}</td><td>${r.total_amount/100}</td></tr>`).join('');
+        document.getElementById('ms-res').innerHTML=h+'</table>';
+    }
+
+    async function openSchedule() {
+        openSubPage('排餐管理', `<div class="card"><h4>批量排餐</h4><div class="search-box"><input type="date" id="sc-s"><span>-</span><input type="date" id="sc-e"></div><button class="btn" onclick="doSc()">提交</button></div><div class="card" id="sc-l"></div>`);
+        loadSc();
+    }
+    async function doSc(){
+        const s=document.getElementById('sc-s').value; const e=document.getElementById('sc-e').value;
+        if(!s) return alert('选日期');
+        const r=await request('/admin/schedule.php','POST',{action:'add',start_date:s,end_date:e});
+        if(r.code===0){toast('成功');loadSc();}else alert(r.msg);
+    }
+    async function loadSc(){
+        const r=await request('/admin/schedule.php');
+        document.getElementById('sc-l').innerHTML=r.data.map(x=>`<div class="list-item"><div>${x.date}</div><button class="btn-danger" style="width:auto;padding:2px 8px;font-size:12px" onclick="delSc('${x.date}')">删</button></div>`).join('');
+    }
+    async function delSc(d){if(confirm('删?'))await request('/admin/schedule.php','POST',{action:'delete',date:d});loadSc();}
+
+    async function openBookingConfig() {
+        const r=await request('/admin/config.php');
+        openSubPage('报餐设置', `<div class="card"><h4>每日截止时间</h4><input type="time" id="cfg-t" value="${r.data.deadline_lunch||'10:30'}"><button class="btn" onclick="saveT()">保存</button></div>`);
+    }
+    async function saveT(){await request('/admin/config.php','POST',{deadline_lunch:document.getElementById('cfg-t').value});toast('保存成功');}
+
+    async function openUserMgr() {
+        openSubPage('人员管理', `<div class="card"><div class="search-box"><input id="um-k" placeholder="搜姓名/手机"><button class="btn" style="width:60px" onclick="loadU()">搜</button></div><div style="display:flex;gap:5px"><button class="btn btn-outline" style="font-size:12px;padding:5px" onclick="loadU('0')">待审</button><button class="btn btn-outline" style="font-size:12px;padding:5px" onclick="loadU('')">全部</button></div></div><div id="um-l"></div>`);
+        loadU();
+    }
+    async function loadU(s=''){
+        const k=document.getElementById('um-k')?document.getElementById('um-k').value:'';
+        const r=await request(`/admin/users.php?keyword=${k}&status=${s}`);
+        document.getElementById('um-l').innerHTML=r.data.map(u=>`<div class="card"><div style="display:flex;justify-content:space-between"><div><strong>${u.name}</strong> (${u.phone})<div><small>${u.level_name}|${u.role}</small></div></div><div>${u.status==0?`<button class="btn btn-success" style="width:auto;padding:4px 8px;font-size:12px" onclick="audU(${u.id})">通过</button>`:''}</div></div><div style="text-align:right;margin-top:5px"><button class="btn btn-outline" style="width:auto;padding:2px 5px" onclick="edtU(${u.id},'${u.name}','${u.phone}',${u.level_id})">编辑</button> <button class="btn btn-outline" style="width:auto;padding:2px 5px" onclick="roleU(${u.id})">权限</button> <button class="btn btn-outline" style="width:auto;padding:2px 5px;border-color:red;color:red" onclick="delU(${u.id})">删</button></div></div>`).join('');
+    }
+    function edtU(id,n,p,l){
+        if(globalLevels.length === 0) loadLevelsMeta();
+        let opt = globalLevels.map(x => `<option value="${x.id}" ${x.id==l?'selected':''}>${x.name}</option>`).join('');
+        openSubPage('编辑用户', `<div class="card"><label>姓名</label><input id="eu-n" value="${n}"><label>手机</label><input id="eu-p" value="${p}"><label>身份类型</label><select id="eu-l">${opt}</select><label>密码(选填)</label><input id="eu-pw"><button class="btn" onclick="svU(${id})">保存</button></div>`);
+    }
+    async function svU(id){await request('/admin/users.php','POST',{action:'update_info',id,name:document.getElementById('eu-n').value,phone:document.getElementById('eu-p').value,level_id:document.getElementById('eu-l').value,password:document.getElementById('eu-pw').value});toast('成功');openUserMgr();}
+    async function audU(id){await request('/admin/users.php','POST',{action:'approve',id});loadU('0');}
+    async function delU(id){if(confirm('删?'))await request('/admin/users.php','POST',{action:'delete',id});loadU();}
+    function roleU(id){openSubPage('权限',`<div class="card"><button class="btn btn-outline" style="margin-bottom:10px" onclick="setR(${id},'user')">设为普通用户</button><button class="btn btn-outline" style="margin-bottom:10px" onclick="setR(${id},'finance')">设为财务</button><button class="btn btn-outline" onclick="setR(${id},'admin')">设为管理员</button></div>`);}
+    async function setR(id,r){await request('/admin/users.php','POST',{action:'set_role',id,role:r});toast('成功');openUserMgr();}
+
+    function openFinanceMgr() {
+        openSubPage('财务管理', `<div class="card"><h4>用户充值</h4><div class="search-box"><input id="fm-k" placeholder="手机号"><button class="btn" style="width:60px" onclick="finS()">查</button></div></div><div id="fm-r"></div>`);
+    }
+    async function finS(){
+        const p=document.getElementById('fm-k').value; const r=await request(`/admin/users.php?keyword=${p}`);
+        const u=r.data.find(x=>x.phone===p);
+        if(!u) return document.getElementById('fm-r').innerHTML='<div class="card">未找到</div>';
+        document.getElementById('fm-r').innerHTML=`<div class="card" style="border-left:4px solid #17a2b8"><h3>${u.name}</h3><p>余额: ${u.amount/100}</p><div class="search-box"><input type="number" id="fm-a" placeholder="金额"><button class="btn btn-success" style="width:80px" onclick="doRc(${u.id})">充值</button></div></div><div class="card"><h4>充值记录</h4><div id="fm-l"></div></div>`;
+        const l=await request(`/finance/logs.php?keyword=${p}`);
+        document.getElementById('fm-l').innerHTML=l.data.map(x=>`<div class="list-item"><span>${x.created_at.split(' ')[0]}</span><span>+${x.amount/100}</span></div>`).join('');
+    }
+    async function doRc(id){const a=document.getElementById('fm-a').value;if(confirm(`充 ${a}?`)){await request('/finance/recharge.php','POST',{user_id:id,amount:a});finS();}}
+
+    async function openPrices() {
+        const r=await request('/admin/settings.php');
+        
+        let html = `<div class="card" style="border-left:4px solid #007bff">
+            <h4>添加新身份</h4>
+            <div class="search-box">
+                <input type="text" id="new-lvl-name" placeholder="名称(如:专线)">
+                <input type="number" id="new-lvl-price" placeholder="价格(元)" style="width:80px">
+                <button class="btn" style="width:80px" onclick="addLvl()">添加</button>
+            </div>
+        </div>`;
+        
+        html += r.data.levels.map(l => `
+            <div class="card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <strong>${l.name}</strong>
+                    ${l.id > 2 ? `<button class="btn-danger" style="width:auto;padding:2px 8px;font-size:12px" onclick="delLvl(${l.id})">删除</button>` : '<span style="font-size:12px;color:#999">系统预置</span>'}
+                </div>
+                <div class="search-box" style="margin-bottom:0">
+                    <input type="number" id="pl-${l.id}" value="${l.price/100}" placeholder="价格">
+                    <button class="btn" style="width:80px" onclick="svP(${l.id})">更新</button>
+                </div>
+            </div>
+        `).join('');
+        
+        openSubPage('身份价格', html);
+    }
+    async function svP(id){await request('/admin/settings.php','POST',{action:'update_price',id,price:Math.round(document.getElementById('pl-'+id).value*100)});toast('价格已更新');}
+    async function addLvl(){
+        const n = document.getElementById('new-lvl-name').value;
+        const p = document.getElementById('new-lvl-price').value;
+        if(!n) return alert('名称必填');
+        await request('/admin/settings.php','POST',{action:'add_level', name:n, price:Math.round(p*100)});
+        toast('添加成功'); openPrices();
+        loadLevelsMeta(); 
+    }
+    async function delLvl(id){
+        if(!confirm('确定删除此身份？如果该身份下有用户将无法删除。')) return;
+        const res = await request('/admin/settings.php','POST',{action:'del_level', id:id});
+        if(res.code===0) { toast('已删除'); openPrices(); loadLevelsMeta(); } else { alert(res.msg); }
+    }
+
+    async function openAnalysis() {
+        openSubPage('统计分析', `<div class="card"><div style="display:flex;gap:10px;margin-bottom:15px"><button class="btn btn-outline" onclick="ldAn('day')">按日</button><button class="btn btn-outline" onclick="ldAn('month')">按月</button></div><div style="background:#f0f0f0;padding:10px;border-radius:4px;text-align:center;margin-bottom:15px">总资金池 <span style="font-weight:bold;color:#007bff" id="an-p">...</span></div><div id="an-c"></div></div>`);
+        ldAn('day');
+    }
+    async function ldAn(m){
+        const r=await request(`/admin/stats.php?type=analysis&mode=${m}`);
+        document.getElementById('an-p').innerText='¥'+(r.data.pool/100).toFixed(2);
+        let h=`<h4>营业收入</h4><table><tr><th>时间</th><th>收入</th></tr>${r.data.income.map(x=>`<tr><td>${x.d}</td><td>${x.total/100}</td></tr>`).join('')}</table>`;
+        h+=`<h4 style="margin-top:20px">充值资金</h4><table><tr><th>时间</th><th>充值</th></tr>${r.data.recharge.map(x=>`<tr><td>${x.d}</td><td>${x.total/100}</td></tr>`).join('')}</table>`;
+        document.getElementById('an-c').innerHTML=h;
+    }
+
+    function openFeedbackSubmit(){openSubPage('反馈',`<div class="card"><textarea id="fb-c" rows="5" placeholder="意见..."></textarea><button class="btn" style="margin-top:10px" onclick="subFb('add')">提交</button></div>`);}
+    async function subFb(a){await request('/user/feedback.php','POST',{action:a,content:document.getElementById('fb-c').value});toast('已提交');closeSubPage();}
+    
+    async function openFeedbackList(){
+        const r=await request('/user/feedback.php');
+        const listHtml = r.data.length 
+            ? r.data.map(f=>`<div class="card"><div style="display:flex;justify-content:space-between"><div><strong>${f.name}</strong> <small>${f.created_at}</small></div><button class="btn-danger" style="width:auto;padding:2px 8px;font-size:12px" onclick="delFb(${f.id})">删除</button></div><div style="margin-top:5px;color:#333">${f.content}</div></div>`).join('') 
+            : '<div class="card">无数据</div>';
+        openSubPage('反馈列表', listHtml);
+    }
+    async function delFb(id) { if(!confirm('确认删除?')) return; await request('/user/feedback.php', 'POST', {action:'delete', id:id}); openFeedbackList(); }
+
+    function openEditProfile() {
+        const html = `
+            <div class="card">
+                <h4>修改个人资料</h4>
+                <label>姓名</label><input type="text" id="ep-n" value="${curUser.name}">
+                <label>手机号 (登录账号)</label><input type="tel" id="ep-ph" value="${curUser.phone}">
+                <label>登录密码 (留空则不修改)</label><input type="password" id="ep-p" placeholder="输入新密码">
+                <button class="btn" onclick="svEp()">保存修改</button>
+            </div>
+        `;
+        openSubPage('个人设置', html);
+    }
+    async function svEp() {
+        const name = document.getElementById('ep-n').value;
+        const phone = document.getElementById('ep-ph').value;
+        const pass = document.getElementById('ep-p').value;
+        if (!name || !phone) return alert('姓名和手机号不能为空');
+
+        const res = await request('/user/profile.php', 'POST', { name: name, phone: phone, password: pass });
+        if (res.code === 0) {
+            alert('保存成功，如果修改了手机号或密码，请重新登录');
+            location.reload();
+        } else {
+            alert(res.msg);
+        }
+    }
+
+    async function loadOrderList() {
+        const res = await request('/user/menu.php');
+        const div = document.getElementById('order-list');
+        if (!res.data || res.data.list.length === 0) { div.innerHTML = '<div class="card" style="text-align:center; padding:30px; color:#999">暂无排餐</div>'; return; }
+        div.innerHTML = res.data.list.map(d => {
+            const [y,m,day] = d.date.split('-');
+            const dateStr = `${y}年${m}月${day}日 星期${d.week}`;
+            let btnHtml = '';
+            if (d.is_booked) {
+                btnHtml = d.actionable ? `<button class="btn-danger" style="width:auto; padding:6px 12px; font-size:12px;" onclick="doOrder('cancel', '${d.date}')">退餐</button>` : `<span class="tag tag-gray">已截单</span>`;
+            } else {
+                btnHtml = d.actionable ? `<button class="btn" style="width:auto; padding:6px 12px; font-size:12px;" onclick="doOrder('book', '${d.date}')">报餐</button>` : `<span class="tag tag-gray">已截止</span>`;
+            }
+            return `<div class="card" style="border-left: 5px solid ${d.is_booked ? '#28a745' : '#eee'};"><div style="display:flex; justify-content:space-between; align-items:center;"><div><div style="font-weight:bold; font-size:15px; margin-bottom:8px;">${dateStr}</div><div style="color:#ff6600; font-weight:bold; font-size:13px;">¥ ${(d.price/100).toFixed(2)}</div></div><div style="text-align:right;">${d.is_booked ? '<div style="font-size:12px; color:#28a745; margin-bottom:5px;">已预订</div>' : ''}${btnHtml}</div></div></div>`;
+        }).join('');
+    }
+    async function doOrder(a, d) {
+        if (!confirm(a === 'book' ? '确认报餐？' : '确认退餐？')) return;
+        const res = await request('/user/order.php', 'POST', { action: a, date: d });
+        if (res.code === 0) { toast(a === 'book' ? '报餐成功' : '已退餐'); loadOrderList(); refreshUserData(); } else { alert(res.msg); }
+    }
+
+    async function doLogin(){const r=await request('/user/login.php','POST',{phone:document.getElementById('l-phone').value,password:document.getElementById('l-pass').value});if(r.code===0)location.reload();else alert(r.msg);}
+    async function doReg(){const d={phone:document.getElementById('r-phone').value,password:document.getElementById('r-pass').value,name:document.getElementById('r-name').value,level_id:document.getElementById('r-level').value};const r=await request('/user/register.php','POST',d);if(r.code===0){alert('成功');showAuth('login');}else alert(r.msg);}
+    async function doLogout(){await request('/user/logout.php');location.reload();}
+    async function openMyHistory(){const r=await request('/user/order.php','POST',{action:'history'});openSubPage('记录',`<div class="card">${r.data.map(x=>`<div class="list-item"><span>${x.order_date}</span><span>${x.status=='ordered'?'-'+x.price/100:'退款'}</span></div>`).join('')||'无记录'}</div>`);}
+</script>
+</body>
+</html>

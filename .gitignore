@@ -1,0 +1,13 @@
+# 忽略 SQLite 数据库文件 (保护隐私数据)
+data/*.db
+data/*.db-journal
+data/*.db-wal
+
+# 忽略操作系统生成的临时文件
+.DS_Store
+Thumbs.db
+
+# 忽略 IDE 配置文件 (如果你用 VSCode 或 PhpStorm)
+.idea/
+.vscode/
+*.log

@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>后台管理</title>
+    <link rel="stylesheet" href="static/style.css">
+    <style>
+        .table-row { display: flex; align-items: center; border-bottom: 1px solid #eee; padding: 10px 0; }
+        .table-col { flex: 1; padding: 0 5px; }
+        .inp-sm { width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="card header">
+        <h3>管理后台</h3>
+        <a href="index.html" style="font-size:14px;">返回前台</a>
+    </div>
+
+    <div id="admin-login" class="card hidden">
+        <p>请先在员工端登录管理员账号 (13800138000 / admin123)</p>
+        <a href="index.html" class="btn btn-primary">去登录</a>
+    </div>
+
+    <div id="admin-panel">
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('users')">用户审核</div>
+            <div class="tab" onclick="switchTab('recharge')">财务充值</div>
+            <div class="tab hidden" id="tab-nav-settings" onclick="switchTab('settings')">价格设置</div>
+        </div>
+
+        <div id="tab-users">
+            <div class="card">
+                <input type="text" id="user-kw" placeholder="搜索手机号或姓名..." onchange="loadUsers()">
+                <div style="margin-bottom:10px;">
+                    <button class="btn" style="width:auto; background:#eee; color:#333" onclick="loadUsers('0')">只看待审核</button>
+                    <button class="btn" style="width:auto; background:#eee; color:#333" onclick="loadUsers()">全部</button>
+                </div>
+                <div id="user-list"></div>
+            </div>
+        </div>
+
+        <div id="tab-recharge" class="hidden">
+            <div class="card">
+                <h4>人工充值</h4>
+                <div style="background:#fff3cd; color:#856404; padding:10px; font-size:12px; margin-bottom:10px; border-radius:4px;">
+                    注意：涉及金额操作，请务必核对用户信息。
+                </div>
+                <input type="text" id="rc-uid" placeholder="输入用户 ID (从用户列表查看)">
+                <input type="number" id="rc-amount" placeholder="充值金额 (元)">
+                <button class="btn btn-success" onclick="doRecharge()">确认充值</button>
+            </div>
+            <div class="card">
+                <h4>最近充值记录</h4>
+                <div id="rc-logs" style="font-size:12px;"></div>
+            </div>
+        </div>
+
+        <div id="tab-settings" class="hidden">
+            <div class="card">
+                <h4>🍱 价格体系设置</h4>
+                <p style="font-size:12px; color:#666; margin-bottom:10px;">修改后即时生效，不影响历史订单。</p>
+                <div id="level-list">加载中...</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="static/app.js"></script>
+<script>
+    let currentRole = '';
+
+    (async function init() {
+        const res = await request('/user/info.php');
+        if (!res || res.code !== 0 || (res.data.role !== 'admin' && res.data.role !== 'finance')) {
+            document.getElementById('admin-panel').classList.add('hidden');
+            document.getElementById('admin-login').classList.remove('hidden');
+        } else {
+            currentRole = res.data.role;
+            if (currentRole === 'admin') {
+                document.getElementById('tab-nav-settings').classList.remove('hidden');
+            }
+            loadUsers('0'); 
+            loadRechargeLogs();
+            if (currentRole === 'admin') loadSettings();
+        }
+    })();
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(el => el.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById('tab-users').classList.add('hidden');
+        document.getElementById('tab-recharge').classList.add('hidden');
+        document.getElementById('tab-settings').classList.add('hidden');
+        document.getElementById('tab-' + tab).classList.remove('hidden');
+    }
+
+    // --- 用户管理 ---
+    async function loadUsers(status = '') {
+        const kw = document.getElementById('user-kw').value;
+        const res = await request(`/admin/users.php?keyword=${kw}&status=${status}`);
+        if (res.code !== 0) return;
+
+        const list = document.getElementById('user-list');
+        list.innerHTML = res.data.length ? '' : '<p style="text-align:center;color:#999">暂无数据</p>';
+
+        res.data.forEach(u => {
+            const statusText = u.status == 0 ? '<span style="color:red">待审核</span>' : (u.status == 1 ? '<span style="color:green">正常</span>' : '禁用');
+            const actionBtn = u.status == 0 
+                ? `<button onclick="auditUser(${u.id}, 'approve')" style="color:green; border:1px solid green; background:none; padding:2px 5px; border-radius:3px;">通过</button>` 
+                : '';
+            
+            let roleBtn = '';
+            if (currentRole === 'admin') {
+                if (u.role === 'user') {
+                    roleBtn = `<button onclick="setRole(${u.id}, 'finance')" style="margin-left:5px; color:#fff; background:#17a2b8; border:none; padding:2px 5px; border-radius:3px;">设为财务</button>`;
+                } else if (u.role === 'finance') {
+                    roleBtn = `<button onclick="setRole(${u.id}, 'user')" style="margin-left:5px; color:#666; background:#eee; border:none; padding:2px 5px; border-radius:3px;">降为普通</button>`;
+                } else if (u.role === 'admin') {
+                    roleBtn = `<span style="margin-left:5px; color:#6610f2; font-weight:bold; font-size:12px;">超级管理员</span>`;
+                }
+            }
+
+            list.innerHTML += `
+                <div class="menu-item" style="font-size:14px;">
+                    <div>
+                        <div><strong>${u.name}</strong> <small>(${u.phone})</small></div>
+                        <div style="color:#666; font-size:12px;">ID:${u.id} | ${u.dept_name} | 余额: ${formatMoney(u.amount)}</div>
+                    </div>
+                    <div style="text-align:right">
+                        <div>${statusText}</div>
+                        <div style="margin-top:5px;">${actionBtn}${roleBtn}</div>
+                    </div>
+                </div>`;
+        });
+    }
+
+    async function auditUser(id, action) {
+        if (!confirm('确认操作吗？')) return;
+        const res = await request('/admin/users.php', 'POST', { id, action });
+        if (res.code === 0) { toast('操作成功'); loadUsers(); }
+        else alert(res.msg);
+    }
+
+    async function setRole(id, role) {
+        if (!confirm('确定修改权限吗？')) return;
+        const res = await request('/admin/users.php', 'POST', { id, action: 'change_role', role });
+        if (res.code === 0) { toast('操作成功'); loadUsers(); }
+        else alert(res.msg);
+    }
+
+    // --- 充值 ---
+    async function doRecharge() {
+        const uid = document.getElementById('rc-uid').value;
+        const amt = document.getElementById('rc-amount').value;
+        if (!uid || !amt) return alert('请填写完整');
+        if (!confirm(`确认充值 ${amt} 元吗？`)) return;
+
+        const res = await request('/finance/recharge.php', 'POST', { user_id: uid, amount: amt });
+        if (res.code === 0) {
+            alert(res.msg);
+            document.getElementById('rc-uid').value = '';
+            document.getElementById('rc-amount').value = '';
+            loadRechargeLogs();
+        } else {
+            alert(res.msg);
+        }
+    }
+
+    async function loadRechargeLogs() {
+        const res = await request('/finance/logs.php');
+        if (res.code === 0) {
+            document.getElementById('rc-logs').innerHTML = res.data.map(l => 
+                `<div style="padding:5px 0; border-bottom:1px dashed #eee;">
+                    ${l.created_at} - <strong>${l.user_name}</strong> 充值 ¥${formatMoney(l.amount)}
+                 </div>`
+            ).join('');
+        }
+    }
+
+    // --- 价格设置 ---
+    async function loadSettings() {
+        const res = await request('/admin/settings.php');
+        if (res.code !== 0) return;
+
+        const levelsDiv = document.getElementById('level-list');
+        levelsDiv.innerHTML = `
+            <div class="table-row" style="background:#f8f9fa; font-weight:bold; font-size:12px;">
+                <div class="table-col" style="flex:1">等级名称</div>
+                <div class="table-col" style="flex:1">中餐(元)</div>
+                <div class="table-col" style="flex:1">晚餐(元)</div>
+                <div class="table-col" style="flex:0.8; text-align:right">操作</div>
+            </div>
+        `;
+        res.data.levels.forEach(l => {
+            levelsDiv.innerHTML += `
+                <div class="table-row">
+                    <div class="table-col">${l.name}</div>
+                    <div class="table-col"><input type="number" class="inp-sm" id="p-lunch-${l.id}" value="${l.price_lunch/100}"></div>
+                    <div class="table-col"><input type="number" class="inp-sm" id="p-dinner-${l.id}" value="${l.price_dinner/100}"></div>
+                    <div class="table-col" style="text-align:right">
+                        <button class="btn btn-primary" style="padding:4px 8px; width:auto; font-size:12px;" onclick="savePrice(${l.id})">保存</button>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    async function savePrice(id) {
+        const pLunch = document.getElementById(`p-lunch-${id}`).value;
+        const pDinner = document.getElementById(`p-dinner-${id}`).value;
+        const data = {
+            action: 'update_price',
+            id: id,
+            price_lunch: Math.round(pLunch * 100),
+            price_dinner: Math.round(pDinner * 100)
+        };
+        const res = await request('/admin/settings.php', 'POST', data);
+        if (res.code === 0) toast('价格已更新');
+        else alert(res.msg);
+    }
+</script>
+</body>
+</html>
